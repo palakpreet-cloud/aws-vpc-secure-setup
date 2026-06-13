@@ -66,6 +66,10 @@ Public subnets have **auto-assign public IPv4** enabled. Private subnets do not.
  
 Screenshot from the AWS VPC Resource Map showing the actual deployed resources — VPC, 4 subnets across 2 AZs, route tables, and the attached Internet Gateway:
 ![AWS Resource Map](aws-resource-map.png)
+
+## Learning Notes
+
+For an explanation of the core networking concepts (VPC, subnets, routing, NAT, security group chaining) behind this setup, see [CONCEPTS.md](./CONCEPTS.md)
  
 ## Next Steps
  
