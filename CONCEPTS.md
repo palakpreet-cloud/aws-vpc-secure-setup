@@ -92,3 +92,10 @@ See the architecture diagram in README.md for the visual layout. In summary:
 - **Ingress / Egress**: Inbound / outbound traffic
 - **0.0.0.0/0**: Shorthand for "all IPv4 addresses" — used to mean "anywhere"
 - **Least privilege**: Giving an identity only the permissions it needs, nothing more
+
+## 10. Where Theory Meets Practice
+
+Understanding these concepts on paper is different from knowing what breaks when 
+one is missing. See [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) for four deliberate 
+misconfigurations (SG rule removal, NAT route removal, IGW detachment, an open 
+database exposure) and what actually happened in each case.
