@@ -4,7 +4,7 @@ A custom-built VPC implementing a secure, multi-AZ network architecture with pub
 
 ## Architecture Overview
 
-![VPC Architecture](architecture-diagram.png)
+![VPC Architecture](screenshots/architecture-diagram.png)
 
 The VPC follows a standard 2-tier, 2-AZ design used for highly-available web applications:
 
@@ -77,7 +77,7 @@ Full write-up with observed behavior and root-cause explanations: [TROUBLESHOOTI
 
 Screenshot from the AWS VPC Resource Map showing the actual deployed resources — VPC, 4 subnets across 2 AZs, route tables, and the attached Internet Gateway:
 
-![AWS Resource Map](aws-resource-map.png)
+![AWS Resource Map](screenshots/aws-resource-map.png)
 
 ## Learning Notes
 
