@@ -49,3 +49,61 @@ SG-to-SG references are safer than CIDR-based rules for internal traffic
 like this, because access is tied to *group membership* rather than a
 specific IP range. Even if the DB's private IP were somehow known/guessed,
 traffic can't reach it unless it originates from something inside `web-sg`.
+
+## Day 2 — NAT Gateway + Private Route Break
+
+### What I built
+- Elastic IP allocated for NAT Gateway use
+- NAT Gateway `my-nat-gw` created in `public-subnet-a` (Zonal, Public connectivity)
+- Added route to `private-rt`: `0.0.0.0/0 → my-nat-gw`
+
+This gives private subnets outbound-only internet access — instances there
+can reach out (e.g. package updates, calling external APIs) but nothing
+from the internet can initiate a connection in, unlike the public subnets
+which route directly through the IGW.
+
+### Experiment: breaking the NAT route
+
+**What I did:**
+Deleted the `0.0.0.0/0 → my-nat-gw` route from `private-rt`, leaving only
+the local route (`10.0.0.0/16 → local`).
+
+![NAT route broken](screenshots/troubleshooting/day2-natroute-broken.png)
+
+**What I expected to happen:**
+Any resource in a private subnet would lose all outbound internet access.
+Intra-VPC traffic (talking to resources in other subnets within
+`10.0.0.0/16`) would keep working fine, since the local route is untouched.
+
+**Why this happens:**
+Without a `0.0.0.0/0` route, there's simply no path out of the VPC for
+private subnet traffic. It's not a case of AWS rejecting or blocking the
+traffic at the edge — the traffic never leaves the VPC's local routing
+scope at all, since the route table has no matching destination for it.
+This is different from an SG block (Day 1), where traffic reaches the ENI
+and gets dropped there — this failure happens earlier, at the routing layer.
+
+**How I'd confirm this in a real scenario:**
+An EC2 instance in a private subnet would show connection timeouts on any
+outbound request (e.g. `curl`, `apt update`). Checking the route table
+would be the fastest diagnostic step — no explicit error message points
+to routing as the cause, so this is a "check the boring stuff first" case.
+
+**Fix applied:**
+Re-added the route: Destination = `0.0.0.0/0`, Target = `my-nat-gw`.
+
+![NAT route fixed](screenshots/troubleshooting/day2-natroute-fixed.png)
+
+**Takeaway:**
+Routing failures and security group failures look identical from the
+outside (both present as timeouts), but the root cause and fix location
+are completely different — one's a route table problem, the other's a
+security group problem. Diagnosing correctly means checking both layers,
+not assuming it's always the SG.
+
+### Cleanup
+Deleted `my-nat-gw` and released the associated Elastic IP at the end of
+the session to avoid ongoing NAT Gateway hourly charges, since Day 3
+doesn't require it. The `private-rt` NAT route was also removed since it
+pointed to a now-deleted resource. Will recreate NAT Gateway when needed
+again in Phase 3.
