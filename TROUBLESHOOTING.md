@@ -68,7 +68,7 @@ which route directly through the IGW.
 Deleted the `0.0.0.0/0 → my-nat-gw` route from `private-rt`, leaving only
 the local route (`10.0.0.0/16 → local`).
 
-![NAT route broken](screenshots/troubleshooting/day2-natroute-broken.png)
+![NAT route broken](screenshots/troubleshooting/day2-nat-route-broken.png)
 
 **What I expected to happen:**
 Any resource in a private subnet would lose all outbound internet access.
@@ -92,7 +92,7 @@ to routing as the cause, so this is a "check the boring stuff first" case.
 **Fix applied:**
 Re-added the route: Destination = `0.0.0.0/0`, Target = `my-nat-gw`.
 
-![NAT route fixed](screenshots/troubleshooting/day2-natroute-fixed.png)
+![NAT route fixed](screenshots/troubleshooting/day2-nat-route-fixed.png)
 
 **Takeaway:**
 Routing failures and security group failures look identical from the
