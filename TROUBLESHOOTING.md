@@ -107,3 +107,64 @@ the session to avoid ongoing NAT Gateway hourly charges, since Day 3
 doesn't require it. The `private-rt` NAT route was also removed since it
 pointed to a now-deleted resource. Will recreate NAT Gateway when needed
 again in Phase 3.
+
+## Day 3 — IGW Detachment
+
+### What I built
+No new resources today — this exercise tests the existing `my-igw` and
+`public-rt` setup from Day 1 by deliberately detaching the Internet Gateway.
+
+### Experiment: detaching the Internet Gateway
+
+**What I did:**
+Detached `my-igw` from `my-secure-vpc` (VPC → Internet Gateways → Actions →
+Detach from VPC).
+
+![IGW detached](screenshots/troubleshooting/day3-igw-detached.png)
+
+**What happened to the route table:**
+`public-rt`'s `0.0.0.0/0 → igw-0403eb409d194c215` route immediately changed
+status from Active to **Blackhole**.
+
+![public-rt blackhole](screenshots/troubleshooting/day3-public-rt-blackhole.png)
+
+**What I expected / observed:**
+- Both `public-subnet-a` and `public-subnet-b` would lose all internet
+  connectivity — inbound and outbound — since the IGW is the single gateway
+  handling both directions for public subnets.
+- Intra-VPC traffic (the `10.0.0.0/16 → local` route) stayed **Active**
+  and unaffected, since that route doesn't depend on the IGW at all.
+
+**Why "Blackhole" specifically:**
+This status is AWS's explicit signal that a route's target no longer
+exists or is unreachable — in this case, the IGW is still defined as the
+target in the route table, but since it's detached from the VPC, it can't
+actually forward anything. This is a different failure mode from Day 2,
+where the NAT route was missing entirely. Here the route is still
+*configured*, just non-functional — which is exactly what "Blackhole"
+is designed to flag, rather than making it look like a normal missing-route
+problem.
+
+**How I'd diagnose this in a real scenario:**
+Checking the route table and specifically looking for "Blackhole" status is
+the fastest diagnostic step — that status alone tells you the target
+resource (IGW, NAT Gateway, peering connection, etc.) is gone or detached,
+without needing to inspect the IGW/NAT Gateway itself first.
+
+**Fix applied:**
+Reattached `my-igw` to `my-secure-vpc` (Actions → Attach to VPC).
+
+![IGW reattached](screenshots/troubleshooting/day3-igw-reattached.png)
+
+The `public-rt` route immediately returned to **Active** status — no manual
+route table edit was needed, since the route definition itself never
+changed, only the target's reachability.
+
+![public-rt fixed](screenshots/troubleshooting/day3-public-rt-fixed.png)
+
+**Takeaway:**
+"Blackhole" is a distinct route status from a missing route (Day 2) or an
+SG-level block (Day 1) — it specifically means the route exists but its
+target is gone/unreachable. Recognizing this status immediately narrows
+the diagnosis to "something attached to this target was detached or
+deleted," rather than treating it as a generic connectivity issue.
