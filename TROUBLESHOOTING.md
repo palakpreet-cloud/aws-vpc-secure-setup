@@ -50,6 +50,8 @@ like this, because access is tied to *group membership* rather than a
 specific IP range. Even if the DB's private IP were somehow known/guessed,
 traffic can't reach it unless it originates from something inside `web-sg`.
 
+---
+
 ## Day 2 — NAT Gateway + Private Route Break
 
 ### What I built
@@ -107,6 +109,8 @@ the session to avoid ongoing NAT Gateway hourly charges, since Day 3
 doesn't require it. The `private-rt` NAT route was also removed since it
 pointed to a now-deleted resource. Will recreate NAT Gateway when needed
 again in Phase 3.
+
+---
 
 ## Day 3 — IGW Detachment
 
@@ -168,3 +172,84 @@ SG-level block (Day 1) — it specifically means the route exists but its
 target is gone/unreachable. Recognizing this status immediately narrows
 the diagnosis to "something attached to this target was detached or
 deleted," rather than treating it as a generic connectivity issue.
+
+---
+
+## Day 4 — Dangerous SG Exposure + Final Cleanup
+
+### What I built
+No new resources today — this exercise tests `db-sg` from Day 1 by
+deliberately over-permissioning it, the inverse of Day 1's "remove access"
+exercise. This is the final troubleshooting day of the Phase 1 rebuild.
+
+### Experiment: opening db-sg to the entire internet
+
+**What I did:**
+Attempted to change the existing 3306 rule's source from `web-sg` to
+`0.0.0.0/0` directly. AWS blocked this:
+
+> "You may not specify an IPv4 CIDR for an existing referenced group id rule."
+
+This is a small but useful safety behavior — AWS won't let you silently
+convert an SG-chained rule into an open CIDR rule with a single edit. It
+forces an explicit delete-and-recreate, which adds one deliberate extra
+step before an SG can be opened up this widely.
+
+**Workaround used:**
+Deleted the existing `web-sg`-sourced rule entirely, then added a new rule:
+Type = MYSQL/Aurora, Source = Anywhere-IPv4 (`0.0.0.0/0`).
+
+![db-sg exposed](screenshots/troubleshooting/day4-dbsg-exposed.png)
+
+**What changes functionally:**
+Nothing breaks. No error, no timeout, no visible symptom at all — this is
+the dangerous part. The database now accepts MySQL connection attempts
+from any IP on the internet, not just from resources inside `web-sg`.
+
+**Why this is a real risk:**
+Databases are common scanning/brute-force targets. Port 3306 open to
+`0.0.0.0/0` means anyone running an internet-wide port scan (a constant,
+automated occurrence, not a targeted attack) can attempt a connection. If
+the DB has a weak password or an unpatched vulnerability, this becomes a
+direct path to compromise — no need to breach the web tier first.
+
+**Why SG chaining (source = web-sg) prevents this:**
+Restricting the source to `web-sg` means inbound traffic must originate
+from a resource that is itself inside that security group, regardless of
+where the underlying request came from on the internet. An attacker has
+to first compromise something inside `web-sg` before they can even attempt
+to reach the DB — a real access barrier, not just an IP filter that's easy
+to spoof or route around.
+
+**How I'd catch this in an audit:**
+Manually reviewing SG rules for any database port (3306, 5432, 1433, etc.)
+with source `0.0.0.0/0` is a standard first-pass security audit check.
+This is exactly the class of misconfiguration my `cloud-security-audit-tool`
+project (P5) is designed to detect automatically, rather than relying on
+someone remembering to check manually.
+
+**Fix applied:**
+Deleted the `0.0.0.0/0` rule, re-added the rule with source = `web-sg`.
+
+![db-sg fixed](screenshots/troubleshooting/day4-dbsg-fixed.png)
+
+**Takeaway:**
+This exercise was different from Days 1–3 — those broke *availability*
+(something stopped working, loudly). This one breaks *security* silently,
+with zero functional symptom. That distinction is exactly why automated
+config auditing matters: broken access is self-reporting, but broken
+security often isn't, and has to be actively checked for.
+
+---
+
+### Final Phase 1 cleanup check
+With all 4 days of the rebuild and troubleshooting complete, verified no
+paid resources were left running:
+- NAT Gateway: none active (deleted end of Day 2)
+- Elastic IPs: none unassociated
+- EC2 instances: none running
+
+Remaining live resources are all free-tier structural components: VPC,
+4 subnets, IGW (attached), `public-rt`/`private-rt`, `web-sg`/`db-sg`.
+
+**Phase 1 rebuild status: complete.**
