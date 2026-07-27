@@ -31,8 +31,8 @@ stay up. Each subnet has a distinct /24 CIDR carved out of the VPC's
 **What this shows:** `my-igw`, the component that lets resources in
 public subnets reach the internet. State shows **Attached** to
 `my-secure-vpc` — an IGW that exists but isn't attached does nothing,
-so this confirms the attach step (Actions → Attach to VPC) was actually
-completed, not just the IGW created.
+so this confirms the attach step was actually completed, not just the
+IGW created.
 
 ## 4. Public Route Table — Routes
 ![Public RT routes](screenshots/setup/04-public-rt-routes.png)
@@ -65,18 +65,49 @@ two ports a web server actually needs.
 ![db-sg inbound](screenshots/setup/07-db-sg-inbound-correct.png)
 
 **What this shows:** `db-sg` allowing inbound MySQL traffic (port 3306)
-with the source set to the `web-sg` security group ID (`sg-xxxx`), not
-an IP range. This is security group chaining — instead of opening 3306
-to a CIDR block, only resources that are themselves inside `web-sg` can
-reach the database. Even if someone knows the DB's private IP, they
-can't connect unless their traffic originates from a `web-sg` resource.
+with the source set to the `web-sg` security group ID, not an IP range.
+This is security group chaining — instead of opening 3306 to a CIDR
+block, only resources that are themselves inside `web-sg` can reach the
+database. Even if someone knows the DB's private IP, they can't connect
+unless their traffic originates from a `web-sg` resource.
 
 ## 8. Private Route Table — No Internet Route
 ![Private RT no internet](screenshots/setup/08-private-rt-no-internet-route.png)
 
 **What this shows:** `private-rt` with only the auto-created local route
-(`10.0.0.0/16 → local`) — deliberately no `0.0.0.0/0` route yet. This is
-expected at this stage: private subnets shouldn't have direct internet
-access at all; they'll get outbound-only access via a NAT Gateway on
-Day 2, which is a different mechanism from the public subnets' direct
-IGW route.
+(`10.0.0.0/16 → local`) — deliberately no `0.0.0.0/0` route at this point
+in the build. Private subnets shouldn't have direct internet access;
+they get outbound-only access via a NAT Gateway instead, added next.
+
+## 9. NAT Gateway Created
+![NAT Gateway created](screenshots/setup/09-nat-gateway-created.png)
+
+**What this shows:** `my-nat-gw`, a Zonal NAT Gateway created in
+`public-subnet-a` with Public connectivity, State = **Available**. A NAT
+Gateway must live in a public subnet since it needs the IGW route to
+reach the internet on behalf of resources in private subnets.
+
+## 10. Elastic IP Allocated
+![Elastic IP allocated](screenshots/setup/10-elastic-ip-allocated.png)
+
+**What this shows:** The Elastic IP allocated and associated with
+`my-nat-gw`. A NAT Gateway requires a static public IP to route traffic
+through — an unassociated Elastic IP would incur charges for no purpose,
+so this confirms it's properly attached and in active use.
+
+## 11. Private Route Table — NAT Route Added
+![Private RT NAT route](screenshots/setup/11-private-rt-nat-route.png)
+
+**What this shows:** `private-rt` updated with a second route:
+`0.0.0.0/0 → my-nat-gw`, alongside the existing local route. This gives
+private subnets outbound-only internet access — instances there can reach
+out (e.g. for package updates or external API calls), but nothing from
+the internet can initiate a connection in, unlike the public subnets
+which route directly through the IGW.
+
+---
+
+**Note:** The NAT Gateway and its Elastic IP shown in screenshots 9–11
+were deleted/released at the end of Day 2 to avoid ongoing hourly charges,
+since Phase 1's remaining troubleshooting days did not require them. They
+will be recreated when needed again in Phase 3.
